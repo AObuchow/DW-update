@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"path/filepath"
 
@@ -16,8 +17,12 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const NAMESPACE string = "devworkspace-controller"
-const helpMessage string = "Takes as input an existing DevWorkspace and the path to a Devfile and prints to stdout a DevWorkspace object, identical to the orginal one, but with the template replaced by the Devfile content (with a few gotchas).\nUsage:\n  dw-update [options]\nOptions:  -d, --devfile=[]:\n    The file that contains the new devfile that is going to be applied.\n  -w, --devworksapce=[]:\n    The name of the original DevWorksapce object that is going to be used to create the new ."
+const (
+	NAMESPACE               string = "devworkspace-controller"
+	usage                   string = "Takes as input an existing DevWorkspace and the path to a Devfile and prints to stdout a DevWorkspace object, identical to the orginal one, but with the template replaced by the Devfile content (with a few gotchas).\n\nUsage:\n  dw-update [options]\n\nOptions:\n  -d, --devfile=[]:\n    The file that contains the new devfile that is going to be applied.\n  -w, --devworkspace=[]:\n    The name of the original DevWorkspace object that is going to be used to create the new DevWorkspace.\n"
+	devFileArgHelpMessage   string = "The file that contains the new devfile that is going to be applied."
+	devworkspaceHelpMessage string = "The name of the original DevWorkspace object that is going to be used to create the new DevWorkspace"
+)
 
 func loadDevfileOrPanic(filePath string) dw.Devfile {
 	bytes, err := os.ReadFile(filePath)
@@ -33,42 +38,13 @@ func loadDevfileOrPanic(filePath string) dw.Devfile {
 
 func main() {
 
-	argsWithoutProg := os.Args[1:]
+	devfilePath, devworkspaceName := parseArgs()
 
-	devfilePath := ""
-	devworkspaceName := ""
+	devfile := loadDevfileOrPanic(*devfilePath)
 
-	// TODO: Improve commandline args handling, do error checking etc
-	for i, arg := range argsWithoutProg {
-		if arg == "-d" || arg == "--devfile" {
-			devfilePath = argsWithoutProg[i+1]
-		}
-
-		if arg == "-w" || arg == "--devworkspace" {
-			devworkspaceName = argsWithoutProg[i+1]
-		}
-
-		if arg == "-h" || arg == "--help" {
-			fmt.Println(helpMessage)
-			os.Exit(0)
-		}
-	}
-
-	if devfilePath == "" {
-		fmt.Println("A path to a devfile must be given.")
-		os.Exit(1)
-	}
-
-	if devworkspaceName == "" {
-		fmt.Println("The name of the devworkspace you want to update must be given.")
-		os.Exit(1)
-	}
-
-	devfile := loadDevfileOrPanic(devfilePath)
-
+	// TODO: Remove these, for debug purposes
 	fmt.Println("Devfile is: ", devfilePath)
 	fmt.Println("Devworkspace name is: ", devworkspaceName)
-
 	fmt.Println("Devfile name: ", devfile.Metadata.Name)
 
 	// TODO: Setup kube client depending on whether we're in a pod or running locally
@@ -92,7 +68,7 @@ func main() {
 		panic(err)
 	}
 
-	dw, err := client.DevWorkspace(NAMESPACE).Get(devworkspaceName, metav1.GetOptions{})
+	dw, err := client.DevWorkspace(NAMESPACE).Get(*devworkspaceName, metav1.GetOptions{})
 	if err != nil && k8sErrors.IsNotFound(err) {
 		panic(err)
 	}
@@ -148,4 +124,29 @@ func main() {
 
 	}
 
+}
+
+func parseArgs() (*string, *string) {
+	devfilePath := flag.String("d", "", devFileArgHelpMessage)
+	flag.StringVar(devfilePath, "devfile", *devfilePath, devFileArgHelpMessage)
+
+	devworkspaceName := flag.String("w", "", devworkspaceHelpMessage)
+	flag.StringVar(devworkspaceName, "devworkspace", *devworkspaceName, devworkspaceHelpMessage)
+
+	flag.Usage = func() {
+		fmt.Fprint(flag.CommandLine.Output(), usage)
+	}
+
+	flag.Parse()
+
+	if *devfilePath == "" {
+		fmt.Println("A path to a devfile must be given.")
+		os.Exit(1)
+	}
+
+	if *devworkspaceName == "" {
+		fmt.Println("The name of the devworkspace you want to update must be given.")
+		os.Exit(1)
+	}
+	return devfilePath, devworkspaceName
 }
