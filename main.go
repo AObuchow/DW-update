@@ -8,6 +8,7 @@ import (
 	"os"
 
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 
@@ -24,41 +25,27 @@ const (
 	devworkspaceHelpMessage string = "The name of the original DevWorkspace object that is going to be used to create the new DevWorkspace"
 )
 
-func loadDevfileOrPanic(filePath string) dw.Devfile {
-	bytes, err := os.ReadFile(filePath)
-	if err != nil {
-		panic(err)
-	}
-	var devfile dw.Devfile
-	if err := yaml.Unmarshal(bytes, &devfile); err != nil {
-		panic(err)
-	}
-	return devfile
-}
-
 func main() {
-
 	devfilePath, devworkspaceName := parseArgs()
-
 	devfile := loadDevfileOrPanic(*devfilePath)
+
+	// Setup kube client depending on whether we're in a pod or running locally
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		if err == rest.ErrNotInCluster {
+			config, err = OutClusterConfig()
+			if err != nil {
+				panic(err.Error())
+			}
+		} else {
+			panic(err.Error())
+		}
+	}
 
 	// TODO: Remove these, for debug purposes
 	fmt.Println("Devfile is: ", devfilePath)
 	fmt.Println("Devworkspace name is: ", devworkspaceName)
 	fmt.Println("Devfile name: ", devfile.Metadata.Name)
-
-	// TODO: Setup kube client depending on whether we're in a pod or running locally
-	var kubeconfig string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = filepath.Join(home, ".kube", "config")
-	} else {
-		panic(nil)
-	}
-
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		panic(err.Error())
-	}
 
 	// create the clientset
 	client, err := clusterClient.NewForConfig(config)
@@ -79,6 +66,34 @@ func main() {
 
 	}
 
+}
+
+// TODO: Cleanup this function..
+func OutClusterConfig() (config *rest.Config, err error) {
+	if home := homedir.HomeDir(); home != "" {
+		kubeconfig := filepath.Join(home, ".kube", "config")
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "Couldn't find ~/.kube/config file and not running in a pod. Exiting.")
+		os.Exit(1)
+	}
+	return config, nil
+}
+
+func loadDevfileOrPanic(filePath string) dw.Devfile {
+	bytes, err := os.ReadFile(filePath)
+	if err != nil {
+		panic(err)
+	}
+	var devfile dw.Devfile
+	if err := yaml.Unmarshal(bytes, &devfile); err != nil {
+		panic(err)
+	}
+	return devfile
 }
 
 func updateDevWorkspace(dw *dw.DevWorkspace, devfile dw.Devfile, client *clusterClient.ExampleV1Alpha1Client) {
