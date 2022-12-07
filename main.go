@@ -61,7 +61,6 @@ func main() {
 	}
 
 	// create the clientset
-
 	client, err := clusterClient.NewForConfig(config)
 
 	if err != nil {
@@ -76,54 +75,56 @@ func main() {
 	// Get the devworkspace from cluster
 	if dw != nil {
 		fmt.Println("Found the dw with given name: " + dw.Name)
-
-		// Preserve devworkspace spec.template.originalProjects
-		originalProjects := dw.Spec.Template.Projects
-
-		// take note of which spec.template.components have controller.devfile.io/merge-contribution: true attribute
-
-		// todo use a map here to check for existence by component name when we it
-		contributionNames := make(map[string]string)
-
-		for _, component := range dw.Spec.Template.Components {
-			if component.Attributes != nil {
-				if component.Attributes.Exists("controller.devfile.io/merge-contribution") {
-					if component.Attributes.GetBoolean("controller.devfile.io/merge-contribution", nil) {
-						contributionNames[component.Name] = ""
-					}
-				}
-			}
-		}
-
-		// Replace devworkspace spec.template with devfile content
-
-		dw.Spec.Template = devfile.DevWorkspaceTemplateSpec
-
-		// Retain original devworkspace projects
-		dw.Spec.Template.Projects = originalProjects
-
-		// for fun, append new projects..
-		dw.Spec.Template.Projects = append(dw.Spec.Template.Projects, devfile.Projects...)
-
-		// Retain merge contribution for components
-		for _, component := range dw.Spec.Template.Components {
-			if _, ok := contributionNames[component.Name]; ok {
-				if !component.Attributes.Exists("controller.devfile.io/merge-contribution") {
-					component.Attributes.PutBoolean("controller.devfile.io/merge-contribution", true)
-				}
-
-			}
-		}
-
-		// Update devworkspace on cluster
-		_, err := client.DevWorkspace(NAMESPACE).Update(dw, metav1.UpdateOptions{})
-
-		if err != nil {
-			panic(err)
-		}
+		updateDevWorkspace(dw, devfile, client)
 
 	}
 
+}
+
+func updateDevWorkspace(dw *dw.DevWorkspace, devfile dw.Devfile, client *clusterClient.ExampleV1Alpha1Client) {
+	// Preserve devworkspace spec.template.originalProjects
+	originalProjects := dw.Spec.Template.Projects
+
+	// take note of which spec.template.components have controller.devfile.io/merge-contribution: true attribute
+
+	// todo use a map here to check for existence by component name when we it
+	contributionNames := make(map[string]string)
+
+	for _, component := range dw.Spec.Template.Components {
+		if component.Attributes != nil {
+			if component.Attributes.Exists("controller.devfile.io/merge-contribution") {
+				if component.Attributes.GetBoolean("controller.devfile.io/merge-contribution", nil) {
+					contributionNames[component.Name] = ""
+				}
+			}
+		}
+	}
+
+	// Replace devworkspace spec.template with devfile content
+	dw.Spec.Template = devfile.DevWorkspaceTemplateSpec
+
+	// Retain original devworkspace projects
+	dw.Spec.Template.Projects = originalProjects
+
+	// for fun, append new projects.. TODO: Remove this
+	dw.Spec.Template.Projects = append(dw.Spec.Template.Projects, devfile.Projects...)
+
+	// Retain merge contribution for components
+	for _, component := range dw.Spec.Template.Components {
+		if _, ok := contributionNames[component.Name]; ok {
+			if !component.Attributes.Exists("controller.devfile.io/merge-contribution") {
+				component.Attributes.PutBoolean("controller.devfile.io/merge-contribution", true)
+			}
+
+		}
+	}
+
+	// Update devworkspace on cluster
+	_, err := client.DevWorkspace(NAMESPACE).Update(dw, metav1.UpdateOptions{})
+
+	if err != nil {
+		panic(err)
+	}
 }
 
 func parseArgs() (*string, *string) {
