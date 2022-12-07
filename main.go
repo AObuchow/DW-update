@@ -55,7 +55,11 @@ func main() {
 	}
 
 	dw, err := client.DevWorkspace(NAMESPACE).Get(*devworkspaceName, metav1.GetOptions{})
-	if err != nil && k8sErrors.IsNotFound(err) {
+	if err != nil {
+		if k8sErrors.IsNotFound(err) {
+			fmt.Fprintf(os.Stderr, "Couldn't find DevWorkspace with name: %s", *devworkspaceName)
+			os.Exit(1)
+		}
 		panic(err)
 	}
 
@@ -65,7 +69,6 @@ func main() {
 		updateDevWorkspace(dw, devfile, client)
 
 	}
-
 }
 
 // TODO: Cleanup this function..
