@@ -21,6 +21,7 @@ func NewForConfig(c *rest.Config) (*ExampleV1Alpha1Client, error) {
 	config.APIPath = "/apis"
 	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 	config.UserAgent = rest.DefaultKubernetesUserAgent()
+	dw.AddToScheme(scheme.Scheme)
 
 	client, err := rest.RESTClientFor(&config)
 	if err != nil {

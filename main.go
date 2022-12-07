@@ -26,25 +26,19 @@ const (
 )
 
 func main() {
+
 	devfilePath, devworkspaceName := parseArgs()
 	devfile := loadDevfileOrPanic(*devfilePath)
 
-	// Setup kube client depending on whether we're in a pod or running locally
-	config, err := rest.InClusterConfig()
+	config, err := getKubeConfig()
 	if err != nil {
-		if err == rest.ErrNotInCluster {
-			config, err = OutClusterConfig()
-			if err != nil {
-				panic(err.Error())
-			}
-		} else {
-			panic(err.Error())
-		}
+		// TODO: Use a logger
+		panic(err.Error())
 	}
 
 	// TODO: Remove these, for debug purposes
-	fmt.Println("Devfile is: ", devfilePath)
-	fmt.Println("Devworkspace name is: ", devworkspaceName)
+	fmt.Println("Devfile is: ", *devfilePath)
+	fmt.Println("Devworkspace name is: ", *devworkspaceName)
 	fmt.Println("Devfile name: ", devfile.Metadata.Name)
 
 	// create the clientset
@@ -67,8 +61,23 @@ func main() {
 	if dw != nil {
 		fmt.Println("Found the dw with given name: " + dw.Name)
 		updateDevWorkspace(dw, devfile, client)
-
 	}
+}
+
+// Get kube client depending on whether we're in a pod or running locally
+func getKubeConfig() (*rest.Config, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		if err == rest.ErrNotInCluster {
+			config, err = OutClusterConfig()
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+	return config, nil
 }
 
 // TODO: Cleanup this function..
@@ -105,7 +114,7 @@ func updateDevWorkspace(dw *dw.DevWorkspace, devfile dw.Devfile, client *cluster
 
 	// take note of which spec.template.components have controller.devfile.io/merge-contribution: true attribute
 
-	// todo use a map here to check for existence by component name when we it
+	// TODO: Make this map[string]bool ?
 	contributionNames := make(map[string]string)
 
 	for _, component := range dw.Spec.Template.Components {
@@ -125,9 +134,10 @@ func updateDevWorkspace(dw *dw.DevWorkspace, devfile dw.Devfile, client *cluster
 	dw.Spec.Template.Projects = originalProjects
 
 	// for fun, append new projects.. TODO: Remove this
-	dw.Spec.Template.Projects = append(dw.Spec.Template.Projects, devfile.Projects...)
+	//dw.Spec.Template.Projects = append(dw.Spec.Template.Projects, devfile.Projects...)
 
 	// Retain merge contribution for components
+	// TODO: Should we also be keeping the components that have merge contributions?..
 	for _, component := range dw.Spec.Template.Components {
 		if _, ok := contributionNames[component.Name]; ok {
 			if !component.Attributes.Exists("controller.devfile.io/merge-contribution") {
