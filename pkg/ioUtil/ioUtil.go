@@ -2,7 +2,7 @@ package ioUtil // TODO: Find a better name?..
 
 import (
 	"fmt"
-
+	"io"
 	"os"
 
 	dwv1alpha2 "github.com/devfile/api/v2/pkg/apis/workspaces/v1alpha2"
@@ -18,14 +18,29 @@ func PrintDevWorkspace(dw *dwv1alpha2.DevWorkspace) {
 	yamlPrinter.PrintObj(dw, os.Stdout)
 }
 
-func LoadDevfileOrPanic(filePath string) dwv1alpha2.Devfile {
+func LoadDevfile(filePath string) (*dwv1alpha2.Devfile, error) {
 	bytes, err := os.ReadFile(filePath)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	var devfile dwv1alpha2.Devfile
+	devfile := &dwv1alpha2.Devfile{}
 	if err := yaml.Unmarshal(bytes, &devfile); err != nil {
-		panic(err)
+		return nil, err
 	}
-	return devfile
+	return devfile, nil
+}
+
+func ParseDevWorkspaceStdin() (*dwv1alpha2.DevWorkspace, error) {
+	bytes, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return nil, err
+	}
+	devworkspace := &dwv1alpha2.DevWorkspace{}
+	if err := yaml.Unmarshal(bytes, &devworkspace); err != nil {
+		return nil, err
+	}
+	devworkspace.Name = devworkspace.ObjectMeta.Name
+
+	PrintDevWorkspace(devworkspace)
+	return devworkspace, nil
 }

@@ -21,12 +21,23 @@ const (
 
 func main() {
 	opts := cmd.ParseArgs()
-	devfile := io.LoadDevfileOrPanic(opts.DevfilePath)
-
-	config, err := kube.GetKubeConfig()
+	devfile, err := io.LoadDevfile(opts.DevfilePath)
 	if err != nil {
-		// TODO: Use a logger
-		panic(err.Error())
+		panic(err)
+	}
+
+	var client *clusterClient.ExampleV1Alpha1Client = nil
+	if opts.UpdateClusterObject || opts.FetchFromCluster {
+		config, err := kube.GetKubeConfig()
+		if err != nil {
+			// TODO: Use a logger
+			panic(err.Error())
+		}
+
+		client, err = clusterClient.NewForConfig(config)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// TODO: Remove these, for debug purposes
@@ -34,20 +45,18 @@ func main() {
 	fmt.Println("Devworkspace name is: ", opts.DevWorkspaceName)
 	fmt.Println("Devfile name: ", devfile.Metadata.Name)
 
-	// create the clientset
-	client, err := clusterClient.NewForConfig(config)
-
-	if err != nil {
-		panic(err)
-	}
-
-	dw, err := client.DevWorkspace(NAMESPACE).Get(opts.DevWorkspaceName, metav1.GetOptions{})
-	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			fmt.Fprintf(os.Stderr, "Couldn't find DevWorkspace with name %s on the cluster", opts.DevWorkspaceName)
-			os.Exit(1)
+	var dw *dwv1alpha2.DevWorkspace = nil
+	if opts.FetchFromCluster {
+		dw, err = client.DevWorkspace(NAMESPACE).Get(opts.DevWorkspaceName, metav1.GetOptions{})
+		if err != nil {
+			if k8sErrors.IsNotFound(err) {
+				fmt.Fprintf(os.Stderr, "Couldn't find DevWorkspace with name %s on the cluster", opts.DevWorkspaceName)
+				os.Exit(1)
+			}
+			panic(err)
 		}
-		panic(err)
+	} else {
+		dw = opts.ParsedDevWorkspace
 	}
 
 	// Get the devworkspace from cluster
@@ -65,10 +74,13 @@ func main() {
 		}
 
 		io.PrintDevWorkspace(dw)
+	} else {
+		fmt.Fprint(os.Stderr, "No devworkspace provided.", opts.DevWorkspaceName)
+		os.Exit(1)
 	}
 }
 
-func updateDevWorkspace(dw dwv1alpha2.DevWorkspace, devfile dwv1alpha2.Devfile) (updatedDevWorkspace *dwv1alpha2.DevWorkspace) {
+func updateDevWorkspace(dw dwv1alpha2.DevWorkspace, devfile *dwv1alpha2.Devfile) (updatedDevWorkspace *dwv1alpha2.DevWorkspace) {
 	updatedDevWorkspace = dw.DeepCopy()
 	// Preserve original devworkspace spec.template.projects
 	originalProjects := updatedDevWorkspace.Spec.Template.Projects
