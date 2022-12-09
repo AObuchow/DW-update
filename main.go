@@ -63,7 +63,17 @@ func main() {
 	// Get the devworkspace from cluster
 	if dw != nil {
 		fmt.Println("Found the dw with given name: " + dw.Name)
-		updateDevWorkspace(dw, devfile, *updateClusterObject, client)
+		dw = updateDevWorkspace(*dw, devfile)
+
+		if *updateClusterObject {
+			// Update devworkspace on cluster
+			_, err := client.DevWorkspace(NAMESPACE).Update(dw, metav1.UpdateOptions{})
+			if err != nil {
+				panic(err)
+			}
+			fmt.Printf("Succesfully updated devworkspace %s\n", dw.Name)
+		}
+
 		printDevWorkspace(dw)
 	}
 }
@@ -79,7 +89,7 @@ func getKubeConfig() (*rest.Config, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		if err == rest.ErrNotInCluster {
-			config, err = OutClusterConfig()
+			config, err = outClusterConfig()
 			if err != nil {
 				return nil, err
 			}
@@ -91,7 +101,7 @@ func getKubeConfig() (*rest.Config, error) {
 }
 
 // TODO: Cleanup this function..
-func OutClusterConfig() (config *rest.Config, err error) {
+func outClusterConfig() (config *rest.Config, err error) {
 	if home := homedir.HomeDir(); home != "" {
 		kubeconfig := filepath.Join(home, ".kube", "config")
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
@@ -118,7 +128,7 @@ func loadDevfileOrPanic(filePath string) dwv1alpha2.Devfile {
 	return devfile
 }
 
-func updateDevWorkspace(dw *dwv1alpha2.DevWorkspace, devfile dwv1alpha2.Devfile, updateClusterObject bool, client *clusterClient.ExampleV1Alpha1Client) {
+func updateDevWorkspace(dw dwv1alpha2.DevWorkspace, devfile dwv1alpha2.Devfile) (updatedDevWorkspace *dwv1alpha2.DevWorkspace) {
 	// Preserve original devworkspace spec.template.projects
 	originalProjects := dw.Spec.Template.Projects
 
@@ -150,15 +160,7 @@ func updateDevWorkspace(dw *dwv1alpha2.DevWorkspace, devfile dwv1alpha2.Devfile,
 			}
 		}
 	}
-
-	// Update devworkspace on cluster
-	if updateClusterObject {
-		_, err := client.DevWorkspace(NAMESPACE).Update(dw, metav1.UpdateOptions{})
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("Succesfully updated devworkspace %s\n", dw.Name)
-	}
+	return dw
 }
 
 func parseArgs() (*string, *string, *bool) {
