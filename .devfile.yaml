@@ -1,0 +1,21 @@
+schemaVersion: 2.2.0
+metadata:
+  name: dw-update
+attributes:
+  controller.devfile.io/storage-type: ephemeral
+components:
+  - name: tools
+    container:
+      image: quay.io/mloriedo/universal-developer-image:ubi8-latest
+      memoryLimit: 4G
+      cpuLimit: 1000m
+commands:
+  - id: run
+    exec:
+      label: "run"
+      component: tools
+      commandLine: |
+        export DEVFILE=".devfile.yaml" &&
+        export DEVWORKSPACE=$(mktemp) &&
+        kubectl get devworkspace "${DEVWORKSPACE_NAME}" --output yaml > "${DEVWORKSPACE}" &&
+        go run main.go -d "${DEVFILE}" -w "${DEVWORKSPACE}"
