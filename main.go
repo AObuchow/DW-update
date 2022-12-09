@@ -69,7 +69,7 @@ func main() {
 }
 
 func printDevWorkspace(dw *dwv1alpha2.DevWorkspace) {
-	fmt.Println("Resulting DevWorkspace: ")
+	fmt.Printf("Resulting DevWorkspace:\n\n\n")
 	dw.GetObjectKind().SetGroupVersionKind(dwv1alpha2.SchemeGroupVersion.WithKind("DevWorkspace"))
 	yamlPrinter.PrintObj(dw, os.Stdout)
 }
@@ -119,19 +119,17 @@ func loadDevfileOrPanic(filePath string) dwv1alpha2.Devfile {
 }
 
 func updateDevWorkspace(dw *dwv1alpha2.DevWorkspace, devfile dwv1alpha2.Devfile, updateClusterObject bool, client *clusterClient.ExampleV1Alpha1Client) {
-	// Preserve devworkspace spec.template.originalProjects
+	// Preserve original devworkspace spec.template.projects
 	originalProjects := dw.Spec.Template.Projects
 
-	// take note of which spec.template.components have controller.devfile.io/merge-contribution: true attribute
-
-	// TODO: Make this map[string]bool ?
-	contributionNames := make(map[string]string)
-
+	// Find component with the controller.devfile.io/merge-contribution: true attribute
+	mergeContributionComponent := ""
 	for _, component := range dw.Spec.Template.Components {
 		if component.Attributes != nil {
 			if component.Attributes.Exists("controller.devfile.io/merge-contribution") {
 				if component.Attributes.GetBoolean("controller.devfile.io/merge-contribution", nil) {
-					contributionNames[component.Name] = ""
+					mergeContributionComponent = component.Name
+					break // There is only supposed to be one merge contribution component so we stop once we find it
 				}
 			}
 		}
@@ -141,26 +139,21 @@ func updateDevWorkspace(dw *dwv1alpha2.DevWorkspace, devfile dwv1alpha2.Devfile,
 	dw.Spec.Template = devfile.DevWorkspaceTemplateSpec
 
 	// Retain original devworkspace projects
+	// TODO: Append here so that the user can add more projects when updating devworkspace?
 	dw.Spec.Template.Projects = originalProjects
 
-	// for fun, append new projects.. TODO: Remove this
-	//dw.Spec.Template.Projects = append(dw.Spec.Template.Projects, devfile.Projects...)
-
-	// Retain merge contribution for components
-	// TODO: Should we also be keeping the components that have merge contributions?..
+	// Retain merge contribution attribute
 	for _, component := range dw.Spec.Template.Components {
-		if _, ok := contributionNames[component.Name]; ok {
+		if component.Name == mergeContributionComponent {
 			if !component.Attributes.Exists("controller.devfile.io/merge-contribution") {
 				component.Attributes.PutBoolean("controller.devfile.io/merge-contribution", true)
 			}
-
 		}
 	}
 
 	// Update devworkspace on cluster
 	if updateClusterObject {
 		_, err := client.DevWorkspace(NAMESPACE).Update(dw, metav1.UpdateOptions{})
-
 		if err != nil {
 			panic(err)
 		}
