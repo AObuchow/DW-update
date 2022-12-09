@@ -21,17 +21,25 @@ import (
 
 const (
 	NAMESPACE                      string = "devworkspace-controller" //TODO: Allow option to specify namespace
-	usage                          string = "Takes as input an existing DevWorkspace and the path to a Devfile and prints to stdout a DevWorkspace object (which can be optionally applied to the cluster), identical to the orginal one, but with the template replaced by the Devfile content (with a few gotchas).\n\nUsage:\n  dw-update [options]\n\nOptions:\n  -d, --devfile=[]:\n    The file that contains the new devfile that is going to be applied.\n  -w, --devworkspace=[]:\n    The name of the original DevWorkspace object that is going to be used to create the new DevWorkspace.\n  -u, --update=[true,false]\n    A boolean indicating whether the DevWorkspace on the cluster should be updated with the new DevWorkspace.\n"
+	usage                          string = "Takes as input an existing DevWorkspace and the path to a Devfile and prints to stdout a DevWorkspace object (which can be optionally applied to the cluster), identical to the orginal one, but with the template replaced by the Devfile content (with a few gotchas).\n\nUsage:\n  dw-update [options]\n\nOptions:\n  -d, --devfile=[]:\n    The file that contains the new devfile that is going to be applied.\n  -w, --devworkspace=[]:\n    The name of the original DevWorkspace object that is going to be used to create the new DevWorkspace.\n  -c, --cluster-mode=[true,false]\n    A boolean indicating whether the DevWorkspace on the cluster should be updated with the new DevWorkspace.\n  -f, --fetch=[true,false]\n    A boolean indicating whether the given DevWorkspace should be fetched by it's name on the cluster.\n"
 	devFileArgHelpMessage          string = "The file that contains the new devfile that is going to be applied."
-	devworkspaceHelpMessage        string = "The name of the original DevWorkspace object that is going to be used to create the new DevWorkspace"
-	updateClusterObjectHelpMessage string = "Whether the DevWorkspace object on the cluster should be updated with the new DevWorkspace"
+	devworkspaceHelpMessage        string = "The name of the original DevWorkspace object that is going to be used to create the new DevWorkspace. Requires --cluster-mode=true"
+	updateClusterObjectHelpMessage string = "Whether the DevWorkspace object on the cluster should be updated with the new DevWorkspace. Requires --cluster-mode=true"
+	fetchFromClusterHelpMessage    string = "Whether the given DevWorkspace should be fetched by it's name on the cluster."
 )
+
+type Options struct {
+	DevfilePath         string
+	DevWorkspaceName    string
+	UpdateClusterObject bool
+	FetchFromCluster    bool
+}
 
 var yamlPrinter printers.YAMLPrinter = printers.YAMLPrinter{}
 
 func main() {
-	devfilePath, devworkspaceName, updateClusterObject := parseArgs()
-	devfile := loadDevfileOrPanic(*devfilePath)
+	opts := parseArgs()
+	devfile := loadDevfileOrPanic(opts.DevfilePath)
 
 	config, err := getKubeConfig()
 	if err != nil {
@@ -40,8 +48,8 @@ func main() {
 	}
 
 	// TODO: Remove these, for debug purposes
-	fmt.Println("Devfile is: ", *devfilePath)
-	fmt.Println("Devworkspace name is: ", *devworkspaceName)
+	fmt.Println("Devfile is: ", opts.DevfilePath)
+	fmt.Println("Devworkspace name is: ", opts.DevWorkspaceName)
 	fmt.Println("Devfile name: ", devfile.Metadata.Name)
 
 	// create the clientset
@@ -51,10 +59,10 @@ func main() {
 		panic(err)
 	}
 
-	dw, err := client.DevWorkspace(NAMESPACE).Get(*devworkspaceName, metav1.GetOptions{})
+	dw, err := client.DevWorkspace(NAMESPACE).Get(opts.DevWorkspaceName, metav1.GetOptions{})
 	if err != nil {
 		if k8sErrors.IsNotFound(err) {
-			fmt.Fprintf(os.Stderr, "Couldn't find DevWorkspace with name %s on the cluster", *devworkspaceName)
+			fmt.Fprintf(os.Stderr, "Couldn't find DevWorkspace with name %s on the cluster", opts.DevWorkspaceName)
 			os.Exit(1)
 		}
 		panic(err)
@@ -65,7 +73,7 @@ func main() {
 		fmt.Println("Found the dw with given name: " + dw.Name)
 		dw = updateDevWorkspace(*dw, devfile)
 
-		if *updateClusterObject {
+		if opts.UpdateClusterObject {
 			// Update devworkspace on cluster
 			_, err := client.DevWorkspace(NAMESPACE).Update(dw, metav1.UpdateOptions{})
 			if err != nil {
@@ -129,12 +137,13 @@ func loadDevfileOrPanic(filePath string) dwv1alpha2.Devfile {
 }
 
 func updateDevWorkspace(dw dwv1alpha2.DevWorkspace, devfile dwv1alpha2.Devfile) (updatedDevWorkspace *dwv1alpha2.DevWorkspace) {
+	updatedDevWorkspace = dw.DeepCopy()
 	// Preserve original devworkspace spec.template.projects
-	originalProjects := dw.Spec.Template.Projects
+	originalProjects := updatedDevWorkspace.Spec.Template.Projects
 
 	// Find component with the controller.devfile.io/merge-contribution: true attribute
 	mergeContributionComponent := ""
-	for _, component := range dw.Spec.Template.Components {
+	for _, component := range updatedDevWorkspace.Spec.Template.Components {
 		if component.Attributes != nil {
 			if component.Attributes.Exists("controller.devfile.io/merge-contribution") {
 				if component.Attributes.GetBoolean("controller.devfile.io/merge-contribution", nil) {
@@ -146,24 +155,24 @@ func updateDevWorkspace(dw dwv1alpha2.DevWorkspace, devfile dwv1alpha2.Devfile) 
 	}
 
 	// Replace devworkspace spec.template with devfile content
-	dw.Spec.Template = devfile.DevWorkspaceTemplateSpec
+	updatedDevWorkspace.Spec.Template = devfile.DevWorkspaceTemplateSpec
 
 	// Retain original devworkspace projects
 	// TODO: Append here so that the user can add more projects when updating devworkspace?
-	dw.Spec.Template.Projects = originalProjects
+	updatedDevWorkspace.Spec.Template.Projects = originalProjects
 
 	// Retain merge contribution attribute
-	for _, component := range dw.Spec.Template.Components {
+	for _, component := range updatedDevWorkspace.Spec.Template.Components {
 		if component.Name == mergeContributionComponent {
 			if !component.Attributes.Exists("controller.devfile.io/merge-contribution") {
 				component.Attributes.PutBoolean("controller.devfile.io/merge-contribution", true)
 			}
 		}
 	}
-	return dw
+	return updatedDevWorkspace
 }
 
-func parseArgs() (*string, *string, *bool) {
+func parseArgs() *Options {
 	devfilePath := flag.String("d", "", devFileArgHelpMessage)
 	flag.StringVar(devfilePath, "devfile", *devfilePath, devFileArgHelpMessage)
 
@@ -172,6 +181,9 @@ func parseArgs() (*string, *string, *bool) {
 
 	updateClusterObject := flag.Bool("u", false, updateClusterObjectHelpMessage)
 	flag.BoolVar(updateClusterObject, "update", *updateClusterObject, updateClusterObjectHelpMessage)
+
+	fetchFromCluster := flag.Bool("f", true, fetchFromClusterHelpMessage)
+	flag.BoolVar(fetchFromCluster, "fetch-from-cluster", *fetchFromCluster, fetchFromClusterHelpMessage)
 
 	flag.Usage = func() {
 		fmt.Fprint(flag.CommandLine.Output(), usage)
@@ -188,5 +200,16 @@ func parseArgs() (*string, *string, *bool) {
 		fmt.Println("The name of the devworkspace you want to update must be given.")
 		os.Exit(1)
 	}
-	return devfilePath, devworkspaceName, updateClusterObject
+
+	if *devworkspaceName == "" && !*fetchFromCluster {
+		fmt.Println("Must provide a devworkspace name in order to fetch it from the cluster. Provide a devworkspace name with -w or --devworkspace")
+		os.Exit(1)
+	}
+
+	return &Options{
+		DevfilePath:         *devfilePath,
+		DevWorkspaceName:    *devworkspaceName,
+		UpdateClusterObject: *updateClusterObject,
+		FetchFromCluster:    *fetchFromCluster,
+	}
 }
