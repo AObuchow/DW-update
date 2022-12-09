@@ -11,8 +11,22 @@ import (
 )
 
 const (
-	NAMESPACE                      string = "devworkspace-controller" //TODO: Allow option to specify namespace
-	usage                          string = "Takes as input an existing DevWorkspace and the path to a Devfile and prints to stdout a DevWorkspace object (which can be optionally applied to the cluster), identical to the orginal one, but with the template replaced by the Devfile content (with a few gotchas).\n\nUsage:\n  dw-update [options]\n\nOptions:\n  -d, --devfile=[]:\n    The file that contains the new devfile that is going to be applied.\n  -w, --devworkspace=[]:\n    The name of the original DevWorkspace object that is going to be used to create the new DevWorkspace. Requires --fetch=true\n  -c, --cluster-mode=[true,false]\n    A boolean indicating whether the DevWorkspace on the cluster should be updated with the new DevWorkspace.\n  -f, --fetch=[true,false]\n    A boolean indicating whether the given DevWorkspace should be fetched by it's name on the cluster.\n"
+	usage string = `Takes as input an existing DevWorkspace and the path to a Devfile and prints to stdout a DevWorkspace object (which can be optionally applied to the cluster), identical to the orginal one, but with the template replaced by the Devfile content (with a few gotchas).
+
+Usage:
+	$ dw-update [options]
+	
+Options:
+	-d, --devfile=[]:
+	The file that contains the new devfile that is going to be applied.
+	-w, --devworkspace=[]:
+	The name of the original DevWorkspace object that is going to be used to create the new DevWorkspace.
+	Requires --fetch=true
+	-c, --cluster-mode=[true,false]
+	A boolean indicating whether the DevWorkspace on the cluster should be updated with the new DevWorkspace.
+	-f, --fetch=[true,false]
+	A boolean indicating whether the given DevWorkspace should be fetched by it's name on the cluster.
+`
 	devFileArgHelpMessage          string = "The file that contains the new devfile that is going to be applied."
 	devworkspaceHelpMessage        string = "The name of the original DevWorkspace object that is going to be used to create the new DevWorkspace. Requires --fetch=true"
 	updateClusterObjectHelpMessage string = "Whether the DevWorkspace object on the cluster should be updated with the new DevWorkspace."
@@ -41,7 +55,7 @@ func ParseArgs() *Options {
 	flag.BoolVar(updateClusterObject, "update", *updateClusterObject, updateClusterObjectHelpMessage)
 
 	fetchFromCluster := flag.Bool("f", false, fetchFromClusterHelpMessage)
-	flag.BoolVar(fetchFromCluster, "fetch-from-cluster", *fetchFromCluster, fetchFromClusterHelpMessage)
+	flag.BoolVar(fetchFromCluster, "fetch", *fetchFromCluster, fetchFromClusterHelpMessage)
 
 	flag.Usage = func() {
 		fmt.Fprint(flag.CommandLine.Output(), usage)
