@@ -11,7 +11,7 @@
             "mode": "debug",
             "program": "${workspaceFolder}/main.go",
             "args": [
-                    "-w", "test-contrib-code",
+                    "-w", "plain-devworkspace",
                     "-d", "/home/aobuchow/git/che-website/.devfile.yaml"
                     ]
         }
