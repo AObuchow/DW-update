@@ -51,7 +51,7 @@ func main() {
 		dw, err = client.DevWorkspace(NAMESPACE).Get(opts.DevWorkspaceName, metav1.GetOptions{})
 		if err != nil {
 			if k8sErrors.IsNotFound(err) {
-				fmt.Fprintf(os.Stderr, "Couldn't find DevWorkspace with name %s on the cluster", opts.DevWorkspaceName)
+				fmt.Fprintf(os.Stderr, "Couldn't find DevWorkspace with name %s on the cluster\n", opts.DevWorkspaceName)
 				os.Exit(1)
 			}
 			panic(err)
@@ -76,7 +76,7 @@ func main() {
 
 		io.PrintDevWorkspace(dw)
 	} else {
-		fmt.Fprint(os.Stderr, "No devworkspace provided.", opts.DevWorkspaceName)
+		fmt.Fprint(os.Stderr, "No devworkspace provided.\n", opts.DevWorkspaceName)
 		os.Exit(1)
 	}
 }

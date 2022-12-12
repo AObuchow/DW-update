@@ -30,6 +30,18 @@ func LoadDevfile(filePath string) (*dwv1alpha2.Devfile, error) {
 	return devfile, nil
 }
 
+func LoadDevWorkspace(filePath string) (*dwv1alpha2.DevWorkspace, error) {
+	bytes, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	devworkspace := &dwv1alpha2.DevWorkspace{}
+	if err := yaml.Unmarshal(bytes, &devworkspace); err != nil {
+		return nil, err
+	}
+	return devworkspace, nil
+}
+
 func ParseDevWorkspaceStdin() (*dwv1alpha2.DevWorkspace, error) {
 	bytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
