@@ -1,0 +1,105 @@
+name: "Updates devworkspace.spec.template content"
+
+input:
+  devfile:
+    metadata:
+      name: input-devfile
+    components:
+      - name: testing-container-1
+        container:
+          image: testing-image
+      - name: projects
+        volume:
+          ephemeral: true
+          size: 10Gi
+      - name: image-component
+        image:
+          imageName: python-image:latest
+          autoBuild: true
+          dockerfile:
+            uri: docker/Dockerfile
+            args:
+              - 'MY_ENV=/home/path'
+            buildContext: .
+            rootRequired: false
+      - name: custom-component
+        custom:
+          componentClass: "some-component-class"
+    events:
+      preStart:
+        - eventA
+        - eventB
+        - eventC  
+      postStart:    
+        - eventD
+        - eventE
+        - eventF
+      preStop: 
+        - eventG
+        - eventH
+        - eventI
+      postStop:
+        - eventJ
+        - eventK
+        - eventL
+  devworkspace:
+    metadata:
+      name: input-devworkspace
+    spec:
+      template:
+        components:
+          - name: testing-container-1
+            attributes:
+            controller.devfile.io/merge-contribution: true
+            container:
+              image: testing-image
+          - name: projects
+            volume:
+              ephemeral: true
+
+output:
+  devworkspace:
+    metadata:
+      name: input-devworkspace
+    spec:
+      template:
+        components:
+          - name: testing-container-1
+            attributes:
+            controller.devfile.io/merge-contribution: true
+            container:
+              image: testing-image
+          - name: projects
+            volume:
+              ephemeral: true
+              size: 10Gi
+          - name: image-component
+            image:
+              imageName: python-image:latest
+              autoBuild: true
+              dockerfile:
+                uri: docker/Dockerfile
+                args:
+                  - 'MY_ENV=/home/path'
+                buildContext: .
+                rootRequired: false
+          - name: custom-component
+            custom:
+              componentClass: "some-component-class"
+        events:
+          preStart:
+            - eventA
+            - eventB
+            - eventC  
+          postStart:    
+            - eventD
+            - eventE
+            - eventF
+          preStop: 
+            - eventG
+            - eventH
+            - eventI
+          postStop:
+            - eventJ
+            - eventK
+            - eventL
